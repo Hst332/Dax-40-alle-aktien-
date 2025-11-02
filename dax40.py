@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime
 import os
 
-# === DAX40 Ticker-Liste (aktuell gültige Yahoo-Ticker) ===
+# === DAX40 Ticker-Liste ===
 dax_tickers = {
     "Adidas": "ADS.DE", "Airbus": "AIR.DE", "Allianz": "ALV.DE", "BASF": "BAS.DE",
     "Bayer": "BAYN.DE", "Beiersdorf": "BEI.DE", "BMW": "BMW.DE", "Brenntag": "BNR.DE",
@@ -20,7 +20,7 @@ dax_tickers = {
     "Symrise": "SY1.DE", "Volkswagen": "VOW3.DE", "Vonovia": "VNA.DE", "Zalando": "ZAL.DE"
 }
 
-# === Helper-Funktion RSI ===
+# === RSI Funktion ===
 def compute_rsi(series, window=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -28,8 +28,10 @@ def compute_rsi(series, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# === Datenverarbeitung ===
+# === Daten sammeln ===
 rows = []
+datum = datetime.now().strftime("%Y-%m-%d")
+
 for name, ticker in dax_tickers.items():
     try:
         data = yf.download(ticker, period="1mo", interval="1d", progress=False, auto_adjust=True)
@@ -72,31 +74,29 @@ for name, ticker in dax_tickers.items():
             mid_up, mid_same, mid_down = 40, 40, 20
             mid_comment = "Stabiler Verlauf erwartet."
 
+        # Zeile hinzufügen
         rows.append([
-            name, short_up, short_same, short_down, short_comment,
+            name, datum,
+            short_up, short_same, short_down, short_comment,
             mid_up, mid_same, mid_down, mid_comment,
-            round(rsi,2), round(pct_5d,2), round(pct_15d,2), round(vol,2)
+            round(rsi,2), round(pct_5d,2), round(pct_15d,2), round(vol,2),
+            abs(short_up - short_down), abs(mid_up - mid_down)
         ])
     except Exception as e:
         print(f"⚠️ Fehler bei {name}: {e}")
 
 # === DataFrame erstellen ===
 cols = [
-    "Aktie",
+    "Anlageklasse", "Datum",
     "1-5T_Steigt", "1-5T_Bleibt", "1-5T_Fällt", "Einschätzung_1-5T",
     "2-3W_Steigt", "2-3W_Bleibt", "2-3W_Fällt", "Einschätzung_2-3W",
-    "RSI", "5T_Change(%)", "15T_Change(%)", "Volatilität(%)"
+    "RSI", "5T_Change(%)", "15T_Change(%)", "Volatilität(%)",
+    "Diff_1-5", "Diff_2-3W"
 ]
 df = pd.DataFrame(rows, columns=cols)
 
-# === Zusatzspalten für Sortierung ===
-df["Diff_1-5"] = abs(df["1-5T_Steigt"] - df["1-5T_Fällt"])
-df["Diff_2-3W"] = abs(df["2-3W_Steigt"] - df["2-3W_Fällt"])
+# Sortierung nach höchster Differenz 1-5 Tage
 df = df.sort_values(by="Diff_1-5", ascending=False)
-
-# === Datum einfügen ===
-datum = datetime.now().strftime("%Y-%m-%d")
-df.insert(1, "Datum", datum)
 
 # === Alte CSV löschen ===
 for f in os.listdir("."):
@@ -108,3 +108,4 @@ csv_name = f"dax40_probabilities_{datum}.csv"
 df.to_csv(csv_name, index=False)
 
 print(f"✅ Neue Datei erstellt: {csv_name}")
+print(df.head())  # Kontrolle
