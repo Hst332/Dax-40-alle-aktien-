@@ -28,7 +28,7 @@ jobs:
         run: pip install pandas
 
       - name: Generate DAX40 CSV
-        run: python generate_dax40.py
+        run: python dax40.py
 
       - name: Commit and Push CSV
         run: |
