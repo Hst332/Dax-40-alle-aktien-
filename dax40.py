@@ -4,18 +4,18 @@ import numpy as np
 from datetime import datetime
 import os
 
-# === DAX40 Ticker-Liste (Yahoo Finance Kürzel) ===
+# === DAX40 Ticker-Liste (aktuell gültige Yahoo-Ticker) ===
 dax_tickers = {
     "Adidas": "ADS.DE", "Airbus": "AIR.DE", "Allianz": "ALV.DE", "BASF": "BAS.DE",
     "Bayer": "BAYN.DE", "Beiersdorf": "BEI.DE", "BMW": "BMW.DE", "Brenntag": "BNR.DE",
-    "Commerzbank": "CBK.DE", "Continental": "CON.DE", "Daimler Truck": "DTG.DE",
-    "Deutsche Bank": "DBK.DE", "Deutsche Börse": "DB1.DE", "Deutsche Post": "DHL.DE",
+    "Commerzbank": "CBK.DE", "Continental": "CON.DE", "Daimler Truck": "DTX.DE",
+    "Deutsche Bank": "DBK.DE", "Deutsche Börse": "DB1.DE", "Deutsche Post": "DPW.DE",
     "Deutsche Telekom": "DTE.DE", "E.ON": "EOAN.DE", "Fresenius": "FRE.DE",
     "Fresenius Medical Care": "FME.DE", "GEA": "G1A.DE", "Hannover Rück": "HNR1.DE",
     "Heidelberg Materials": "HEI.DE", "Henkel": "HEN3.DE", "Infineon": "IFX.DE",
     "Mercedes-Benz": "MBG.DE", "Merck": "MRK.DE", "MTU Aero Engines": "MTX.DE",
-    "Münchener Rück": "MUV2.DE", "Porsche": "P911.DE", "Qiagen": "QIA.DE",
-    "Rheinmetall": "RHM.DE", "RWE": "RWE.DE", "SAP": "SAP.DE", "Scout24": "G24.DE",
+    "Münchener Rück": "MUV2.DE", "Porsche": "PAH3.DE", "Qiagen": "QIA.DE",
+    "Rheinmetall": "RHM.DE", "RWE": "RWE.DE", "SAP": "SAP.DE", "Scout24": "S24.DE",
     "Siemens": "SIE.DE", "Siemens Energy": "ENR.DE", "Siemens Healthineers": "SHL.DE",
     "Symrise": "SY1.DE", "Volkswagen": "VOW3.DE", "Vonovia": "VNA.DE", "Zalando": "ZAL.DE"
 }
@@ -32,14 +32,23 @@ def compute_rsi(series, window=14):
 rows = []
 for name, ticker in dax_tickers.items():
     try:
-        data = yf.download(ticker, period="1mo", interval="1d", progress=False)
+        data = yf.download(ticker, period="1mo", interval="1d", progress=False, auto_adjust=True)
+        if data.empty:
+            print(f"⚠️ Keine Daten für {name}, überspringe")
+            continue
+
         data["RSI"] = compute_rsi(data["Close"])
-        
+
         # Kennzahlen
-        pct_5d = data["Close"].pct_change(5).iloc[-1] * 100
-        pct_15d = data["Close"].pct_change(15).iloc[-1] * 100 if len(data) > 15 else np.nan
+        pct_5d = data["Close"].pct_change(5).iloc[-1]
+        pct_15d = data["Close"].pct_change(15).iloc[-1] if len(data) > 15 else np.nan
         rsi = data["RSI"].iloc[-1]
         vol = data["Close"].pct_change().std() * 100
+
+        # NaN abfangen
+        pct_5d = 0 if pd.isna(pct_5d) else pct_5d * 100
+        pct_15d = 0 if pd.isna(pct_15d) else pct_15d * 100
+        rsi = 50 if pd.isna(rsi) else rsi
 
         # Kurzfristige Einschätzung
         if rsi < 40 or pct_5d > 2:
