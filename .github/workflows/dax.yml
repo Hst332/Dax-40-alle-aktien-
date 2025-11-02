@@ -15,9 +15,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -25,7 +22,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Dependencies
-        run: pip install pandas
+        run: pip install pandas yfinance numpy
 
       - name: Generate DAX40 CSV
         run: python dax40.py
@@ -37,3 +34,4 @@ jobs:
           git add -A
           git commit -m "🔁 Update DAX40 CSV ($(date +'%Y-%m-%d'))" || echo "No changes to commit"
           git push
+
