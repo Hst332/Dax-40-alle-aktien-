@@ -1,90 +1,102 @@
-import yfinance as yf
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import ta
+import tradingeconomics as te
 import os
+from datetime import datetime
 
-# === DAX40 Symbole ===
-dax40 = {
-    "Adidas": "ADS.DE", "Airbus": "AIR.DE", "Allianz": "ALV.DE", "BASF": "BAS.DE",
-    "Bayer": "BAYN.DE", "Beiersdorf": "BEI.DE", "BMW": "BMW.DE", "Brenntag": "BNR.DE",
-    "Commerzbank": "CBK.DE", "Continental": "CON.DE", "Covestro": "1COV.DE",
-    "Daimler Truck": "DTG.DE", "Deutsche Bank": "DBK.DE", "Deutsche Börse": "DB1.DE",
-    "Deutsche Post": "DPW.DE", "Deutsche Telekom": "DTE.DE", "E.ON": "EOAN.DE",
-    "Fresenius": "FRE.DE", "Fresenius Medical Care": "FME.DE", "Hannover Rück": "HNR1.DE",
-    "Heidelberg Materials": "HEI.DE", "Henkel": "HEN3.DE", "Infineon": "IFX.DE",
-    "Mercedes-Benz": "MBG.DE", "Merck": "MRK.DE", "Münchener Rück": "MUV2.DE",
-    "Porsche": "P911.DE", "Qiagen": "QIA.DE", "Rheinmetall": "RHM.DE",
-    "RWE": "RWE.DE", "SAP": "SAP.DE", "Sartorius": "SRT.DE", "Siemens": "SIE.DE",
-    "Siemens Energy": "ENR.DE", "Siemens Healthineers": "SHL.DE", "Symrise": "SY1.DE",
-    "Volkswagen": "VOW3.DE", "Vonovia": "VNA.DE", "Zalando": "ZAL.DE",
-    "MTU Aero Engines": "MTX.DE", "Scout24": "G24.DE"
+# === API-Key ===
+# 👉 Setze deinen API-Key als Umgebungsvariable (lokal oder in GitHub Actions):
+# export TE_API_KEY="dein_api_key"
+API_KEY = os.getenv("TE_API_KEY", "YOUR_API_KEY_HERE")
+te.login(API_KEY)
+
+# === DAX40 Symbole (TradingEconomics Kürzel) ===
+# Format: Firmenname : Kürzel (Yahoo/TE-Format)
+symbols = {
+    "Adidas": "ADS:GR",
+    "Airbus": "AIR:GR",
+    "Allianz": "ALV:GR",
+    "BASF": "BAS:GR",
+    "Bayer": "BAYN:GR",
+    "Beiersdorf": "BEI:GR",
+    "BMW": "BMW:GR",
+    "Brenntag": "BNR:GR",
+    "Commerzbank": "CBK:GR",
+    "Continental": "CON:GR",
+    "Daimler Truck": "DTG:GR",
+    "Deutsche Bank": "DBK:GR",
+    "Deutsche Börse": "DB1:GR",
+    "Deutsche Post": "DPW:GR",
+    "Deutsche Telekom": "DTE:GR",
+    "E.ON": "EOAN:GR",
+    "Fresenius": "FRE:GR",
+    "Fresenius Medical Care": "FME:GR",
+    "GEA": "G1A:GR",
+    "Hannover Rück": "HNR1:GR",
+    "Heidelberg Materials": "HEI:GR",
+    "Henkel": "HEN3:GR",
+    "Infineon": "IFX:GR",
+    "Mercedes-Benz": "MBG:GR",
+    "Merck": "MRK:GR",
+    "MTU Aero Engines": "MTX:GR",
+    "Münchener Rück": "MUV2:GR",
+    "Porsche": "P911:GR",
+    "Qiagen": "QIA:GR",
+    "Rheinmetall": "RHM:GR",
+    "RWE": "RWE:GR",
+    "SAP": "SAP:GR",
+    "Scout24": "G24:GR",
+    "Siemens": "SIE:GR",
+    "Siemens Energy": "ENR:GR",
+    "Siemens Healthineers": "SHL:GR",
+    "Symrise": "SY1:GR",
+    "Volkswagen": "VOW3:GR",
+    "Vonovia": "VNA:GR",
+    "Zalando": "ZAL:GR"
 }
 
-# === DataFrame vorbereiten ===
+# === Analyse + CSV-Erstellung ===
 rows = []
 datum = datetime.now().strftime("%Y-%m-%d")
 
-for name, ticker in dax40.items():
+for name, symbol in symbols.items():
     try:
-        df = yf.download(ticker, period="1mo", interval="1d", progress=False)
-
-        if df.empty or len(df) < 5:
+        df = te.getMarketsBySymbol(symbols=symbol, output_type='df')
+        if df is None or df.empty:
             print(f"⚠️ Keine Daten für {name}")
             continue
 
-        df["RSI"] = ta.momentum.RSIIndicator(df["Close"]).rsi()
-        df["Volatility"] = (df["High"] - df["Low"]) / df["Close"] * 100
+        price = df.loc[0, "Last"]
+        change = df.loc[0, "DailyChangePercent"]
 
-        # letzte Werte
-        rsi = df["RSI"].iloc[-1]
-        vol = df["Volatility"].tail(5).mean()
-        change_5 = (df["Close"].iloc[-1] / df["Close"].iloc[-6] - 1) * 100 if len(df) > 6 else np.nan
-        change_15 = (df["Close"].iloc[-1] / df["Close"].iloc[-16] - 1) * 100 if len(df) > 16 else np.nan
+        # Beispiel: Wahrscheinlichkeitsschätzung (simple heuristische Logik)
+        steigt = max(0, min(100, 50 + change * 1.5))
+        fällt = max(0, min(100, 50 - change * 1.5))
+        bleibt = max(0, 100 - (steigt + fällt))
 
-        # einfache Einschätzungen
-        if rsi < 35:
-            tendenz = "Überverkauft"
-            steigt = 60
-            fällt = 20
-        elif rsi > 65:
-            tendenz = "Überkauft"
-            steigt = 20
-            fällt = 60
-        else:
-            tendenz = "Neutral"
-            steigt = 40
-            fällt = 30
-
-        bleibt = 100 - (steigt + fällt) // 2
-        diff_1_5 = abs(steigt - fällt)
-        diff_2_3w = abs(change_5 - change_15) if not np.isnan(change_5) and not np.isnan(change_15) else diff_1_5
+        diff = abs(steigt - fällt)
 
         rows.append([
-            name, datum, round(steigt, 1), round(bleibt, 1), round(fällt, 1), tendenz,
-            round(steigt + 5, 1), round(bleibt - 5, 1), round(fällt, 1), f"RSI {rsi:.1f}, {tendenz}",
-            round(rsi, 1), round(change_5, 2), round(change_15, 2), round(vol, 2), round(diff_1_5, 1), round(diff_2_3w, 1)
+            name, datum,
+            round(steigt, 1), round(bleibt, 1), round(fällt, 1),
+            "Positiver Trend" if change > 0 else "Negativer Trend" if change < 0 else "Seitwärts",
+            round(change, 2),
+            round(price, 2),
+            round(diff, 1)
         ])
 
     except Exception as e:
         print(f"⚠️ Fehler bei {name}: {e}")
-        continue
 
-# === CSV erzeugen ===
-df_final = pd.DataFrame(rows, columns=[
-    "Aktie", "Datum", "1-5T_Steigt", "1-5T_Bleibt", "1-5T_Fällt", "Einschätzung_1-5T",
-    "2-3W_Steigt", "2-3W_Bleibt", "2-3W_Fällt", "Einschätzung_2-3W",
-    "RSI", "5T_Change(%)", "15T_Change(%)", "Volatilität(%)", "Diff_1-5", "Diff_2-3W"
-])
+# === DataFrame & Speicherung ===
+cols = [
+    "Aktie", "Datum", "1-5T_Steigt", "1-5T_Bleibt", "1-5T_Fällt",
+    "Einschätzung", "Tagesänderung(%)", "Kurs", "Diff_1-5"
+]
 
-df_final = df_final.sort_values(by="Diff_1-5", ascending=False)
+df_out = pd.DataFrame(rows, columns=cols)
+df_out = df_out.sort_values(by="Diff_1-5", ascending=False)
 
-# alte CSV löschen
-for f in os.listdir("."):
-    if f.startswith("dax40_analysis_") and f.endswith(".csv"):
-        os.remove(f)
+csv_name = f"dax40_tradingeconomics_{datum}.csv"
+df_out.to_csv(csv_name, index=False)
 
-csv_name = f"dax40_analysis_{datum}.csv"
-df_final.to_csv(csv_name, index=False)
-print(f"✅ Neue Datei erstellt: {csv_name} mit {len(df_final)} Einträgen.")
+print(f"✅ Datei erstellt: {csv_name} mit {len(df_out)} Einträgen.")
